@@ -6,7 +6,7 @@
         "Type": "Task",
         "Resource": "arn:aws:states:::lambda:invoke",
         "Parameters": {
-          "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:PrepareQueries",
+          "FunctionName": "arn:aws:lambda:{{REGION}}:{ACCOUNT_ID}:function:PrepareQueries",
           "Payload": {
             "output_bucket.$": "$.output_bucket",
             "output_prefix.$": "$.output_prefix",
@@ -36,7 +36,7 @@
               "Type": "Task",
               "Resource": "arn:aws:states:::lambda:invoke",
               "Parameters": {
-                "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:ExecuteSingleQuery",
+                "FunctionName": "arn:aws:lambda:{REGION}:{ACCOUNT_ID}:function:ExecuteSingleQuery",
                 "Payload.$": "$"
               },
               "End": true
@@ -50,7 +50,7 @@
         "Type": "Task",
         "Resource": "arn:aws:states:::lambda:invoke",
         "Parameters": {
-          "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:ResultsGatherer",
+          "FunctionName": "arn:aws:lambda:{REGION}:{ACCOUNT_ID}:function:ResultsGatherer",
           "Payload": {
             "query_results.$": "$.query_results[*].Payload",
             "timestamp.$": "$.query_details.Payload.timestamp",
@@ -112,7 +112,7 @@
         "Type": "Task",
         "Resource": "arn:aws:states:::lambda:invoke",
         "Parameters": {
-          "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:extract-s3-key",
+          "FunctionName": "arn:aws:lambda:{REGION}:{ACCOUNT_ID}:function:extract-s3-key",
           "Payload": {
             "s3_uri.$": "$.monitoring_result.Payload.formatted_csv_locations[0]"
           }
@@ -135,7 +135,7 @@
         "Type": "Task",
         "Resource": "arn:aws:states:::lambda:invoke",
         "Parameters": {
-          "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:file-transporter",
+          "FunctionName": "arn:aws:lambda:{REGION}:{ACCOUNT_ID}:function:file-transporter",
           "Payload": {
             "source_bucket.$": "$.s3_info.Payload.bucket",
             "source_key.$": "$.s3_info.Payload.key",
@@ -160,7 +160,7 @@
         "Type": "Task",
         "Resource": "arn:aws:states:::lambda:invoke",
         "Parameters": {
-          "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:zip-s3-folder",
+          "FunctionName": "arn:aws:lambda:{REGION}:{ACCOUNT_ID}:function:zip-s3-folder",
           "Payload": {
             "raw_result_files.$": "$.monitoring_result.Payload.raw_result_files",
             "formatted_csv_locations.$": "$.monitoring_result.Payload.formatted_csv_locations",
@@ -187,7 +187,7 @@
         "Type": "Task",
         "Resource": "arn:aws:states:::lambda:invoke",
         "Parameters": {
-          "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:file-transporter",
+          "FunctionName": "arn:aws:lambda:{REGION}:{ACCOUNT_ID}:function:file-transporter",
           "Payload": {
             "source_bucket.$": "$.output_bucket",
             "source_key.$": "$.zip_result.Payload.output_key",
