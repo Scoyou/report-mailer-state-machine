@@ -1,0 +1,224 @@
+{
+  "Comment": "Process Athena queries in parallel with CSV formatting and monitoring",
+  "StartAt": "LoadQueries",
+  "States": {
+    "LoadQueries": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:LoadQueries",
+        "Payload": {
+          "query_names.$": "$.query_names",
+          "query_index_bucket.$": "$.query_index_bucket",
+          "query_prefix.$": "$.query_prefix",
+          "output_bucket.$": "$.output_bucket",
+          "output_prefix.$": "$.output_prefix",
+          "database.$": "$.database"
+        }
+      },
+      "ResultPath": "$.query_details",
+      "Next": "ExecuteQueriesInParallel"
+    },
+    "ExecuteQueriesInParallel": {
+      "Type": "Map",
+      "InputPath": "$.query_details.Payload",
+      "ItemsPath": "$.query_params",
+      "MaxConcurrency": 10,
+      "Parameters": {
+        "query.$": "$$.Map.Item.Value.query",
+        "query_id.$": "$$.Map.Item.Value.query_id",
+        "database.$": "$$.Map.Item.Value.database",
+        "output_bucket.$": "$$.Map.Item.Value.output_bucket",
+        "output_location.$": "$$.Map.Item.Value.output_location"
+      },
+      "Iterator": {
+        "StartAt": "ExecuteSingleQuery",
+        "States": {
+          "ExecuteSingleQuery": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:ExecuteSingleQuery",
+              "Payload.$": "$"
+            },
+            "End": true
+          }
+        }
+      },
+      "ResultPath": "$.query_results",
+      "Next": "MonitorQueries"
+    },
+    "MonitorQueries": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:ResultsGatherer",
+        "Payload": {
+          "query_results.$": "$.query_results[*].Payload",
+          "timestamp.$": "$.query_details.Payload.timestamp",
+          "output_bucket.$": "$.output_bucket",
+          "output_prefix.$": "$.output_prefix",
+          "zip_prefix.$": "$.zip_prefix"
+        }
+      },
+      "ResultPath": "$.monitoring_result",
+      "Next": "CheckQueryStatus"
+    },
+    "CheckQueryStatus": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.monitoring_result.Payload.status",
+          "StringEquals": "RUNNING",
+          "Next": "WaitBeforeNextCheck"
+        },
+        {
+          "Variable": "$.monitoring_result.Payload.status",
+          "StringEquals": "FAILED",
+          "Next": "QueryFailed"
+        }
+      ],
+      "Default": "CheckQueryCount"
+    },
+    "CheckQueryCount": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.monitoring_result.Payload.formatted_csv_locations",
+          "IsPresent": true,
+          "Next": "CheckSingleQuery"
+        }
+      ],
+      "Default": "CreateZipFile"
+    },
+    "CheckSingleQuery": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.monitoring_result.Payload.formatted_csv_locations",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.monitoring_result.Payload.formatted_csv_locations[1]",
+              "IsPresent": false
+            }
+          ],
+          "Next": "ExtractS3Key"
+        }
+      ],
+      "Default": "CreateZipFile"
+    },
+    "ExtractS3Key": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:ExtractS3Key",
+        "Payload": {
+          "s3_uri.$": "$.monitoring_result.Payload.formatted_csv_locations[0]"
+        }
+      },
+      "ResultPath": "$.s3_info",
+      "Next": "CheckForTransporterSingleQuery"
+    },
+    "CheckForTransporterSingleQuery": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.transporter",
+          "IsPresent": true,
+          "Next": "TransportSingleFile"
+        }
+      ],
+      "Default": "ExecutionComplete"
+    },
+    "TransportSingleFile": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:file-transporter-lambda",
+        "Payload": {
+          "source_bucket.$": "$.s3_info.Payload.bucket",
+          "source_key.$": "$.s3_info.Payload.key",
+          "file_name.$": "$.s3_info.Payload.filename",
+          "transporter.$": "$.transporter"
+        }
+      },
+      "ResultPath": "$.transport_result",
+      "Next": "CheckTransportStatus"
+    },
+    "WaitBeforeNextCheck": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "MonitorQueries"
+    },
+    "QueryFailed": {
+      "Type": "Fail",
+      "Cause": "At least one Athena query failed",
+      "Error": "AthenaQueryFailure"
+    },
+    "CreateZipFile": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:zip-s3-folder",
+        "Payload": {
+          "raw_result_files.$": "$.monitoring_result.Payload.raw_result_files",
+          "formatted_csv_locations.$": "$.monitoring_result.Payload.formatted_csv_locations",
+          "timestamp.$": "$.query_details.Payload.timestamp",
+          "output_bucket.$": "$.output_bucket",
+          "zip_prefix.$": "$.zip_prefix"
+        }
+      },
+      "ResultPath": "$.zip_result",
+      "Next": "CheckForTransport"
+    },
+    "CheckForTransport": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.transporter",
+          "IsPresent": true,
+          "Next": "TransportFile"
+        }
+      ],
+      "Default": "ExecutionComplete"
+    },
+    "TransportFile": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:file-transporter-lambda",
+        "Payload": {
+          "source_bucket.$": "$.output_bucket",
+          "source_key.$": "$.zip_result.Payload.output_key",
+          "file_name.$": "$.zip_result.Payload.output_key",
+          "transporter.$": "$.transporter"
+        }
+      },
+      "ResultPath": "$.transport_result",
+      "Next": "CheckTransportStatus"
+    },
+    "CheckTransportStatus": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.transport_result.Payload.status",
+          "StringEquals": "failed",
+          "Next": "TransportFailed"
+        }
+      ],
+      "Default": "ExecutionComplete"
+    },
+    "TransportFailed": {
+      "Type": "Fail",
+      "CausePath": "$.transport_result.Payload.error",
+      "ErrorPath": "$.transport_result.Payload.error_type"
+    },
+    "ExecutionComplete": {
+      "Type": "Pass",
+      "End": true
+    }
+  }
+}
