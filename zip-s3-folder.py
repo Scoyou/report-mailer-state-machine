@@ -11,17 +11,22 @@ def lambda_handler(event, context):
     
     Expected Input:
     {
-        "result_files": ["s3://bucket/path/file1.csv", "s3://bucket/path/file2.csv", ...],
+        "raw_result_files": ["s3://bucket/path/file1.csv", "s3://bucket/path/file2.csv", ...],
+        "formatted_csv_locations": ["s3://bucket/path/processed_file1.csv", "s3://bucket/path/processed_file2.csv", ...],
         "timestamp": "20250306_121530",
         "output_bucket": "my-output-bucket",
         "zip_prefix": "zipped-results/"
     }
     """
     # Extract input parameters from Step Functions
-    result_files = event.get('result_files', [])
+    raw_result_files = event.get('raw_result_files', [])
+    formatted_csv_locations = event.get('formatted_csv_locations', [])
     timestamp = event.get('timestamp', '')
     output_bucket = event.get('output_bucket', '')
     zip_prefix = event.get('zip_prefix', 'zipped-results/')
+    
+    # Use formatted CSV files if available, otherwise use raw files
+    result_files = formatted_csv_locations if formatted_csv_locations else raw_result_files
     
     # Ensure zip_prefix ends with a slash
     if not zip_prefix.endswith('/'):
@@ -82,6 +87,8 @@ def lambda_handler(event, context):
             'timestamp': timestamp,
             'file_count': len(result_files),
             'source_files': result_files,
+            'raw_files': raw_result_files,
+            'formatted_files': formatted_csv_locations,
             'output_location': f"s3://{output_bucket}/{destination_key}"
         }
         

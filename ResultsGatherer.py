@@ -42,11 +42,46 @@ def lambda_handler(event, context):
                     result_file = response['QueryExecution']['ResultConfiguration']['OutputLocation']
                     print(f"Query {query_id} completed successfully. Results at: {result_file}")
                     
+                    # Since we have updated ExecuteSingleQuery, we need to process the CSV here too
+                    s3_client = boto3.client('s3')
+                    output_location = query.get('output_location')
+                    processed_csv_key = f"{output_location}processed_{query_id}.csv"
+                    
+                    # Get the raw result and process it
+                    result_file_key = result_file.replace(f"s3://{output_bucket}/", "")
+                    
+                    try:
+                        # First check if processed file already exists (might have been created by ExecuteSingleQuery)
+                        s3_client.head_object(Bucket=output_bucket, Key=processed_csv_key)
+                        formatted_csv_location = f"s3://{output_bucket}/{processed_csv_key}"
+                    except:
+                        # If not, process it now
+                        import io
+                        import csv
+                        
+                        csv_obj = s3_client.get_object(Bucket=output_bucket, Key=result_file_key)
+                        csv_content = csv_obj['Body'].read().decode('utf-8').splitlines()
+                        
+                        csv_buffer = io.StringIO()
+                        writer = csv.writer(csv_buffer)
+                        for row in csv.reader(csv_content):
+                            writer.writerow(row)
+                        
+                        s3_client.put_object(
+                            Bucket=output_bucket, 
+                            Key=processed_csv_key, 
+                            Body=csv_buffer.getvalue(), 
+                            ContentType='text/csv'
+                        )
+                        
+                        formatted_csv_location = f"s3://{output_bucket}/{processed_csv_key}"
+                    
                     completed_queries.append({
                         'status': 'SUCCEEDED',
                         'query_execution_id': query_execution_id,
                         'query_id': query_id,
-                        'result_file': result_file,
+                        'raw_result_file': result_file,
+                        'formatted_csv_location': formatted_csv_location,
                         'output_bucket': output_bucket
                     })
                 elif query_status in ['FAILED', 'CANCELLED']:
@@ -99,11 +134,18 @@ def lambda_handler(event, context):
         }
     
     # All queries completed successfully
-    result_files = [query.get('result_file') for query in completed_queries]
+    # Get both the raw and formatted result files
+    raw_result_files = [query.get('raw_result_file', '') for query in completed_queries]
+    formatted_csv_locations = [query.get('formatted_csv_location', '') for query in completed_queries]
+    
+    # Filter out empty strings
+    raw_result_files = [f for f in raw_result_files if f]
+    formatted_csv_locations = [f for f in formatted_csv_locations if f]
     
     return {
         'status': 'SUCCEEDED',
-        'result_files': result_files,
+        'raw_result_files': raw_result_files,
+        'formatted_csv_locations': formatted_csv_locations,
         'timestamp': timestamp,
         'output_bucket': output_bucket
     }
