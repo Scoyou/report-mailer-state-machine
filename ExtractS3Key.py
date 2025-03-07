@@ -24,10 +24,8 @@ def lambda_handler(event, context):
             'uri': s3_uri
         }
     
-    # Remove the s3:// prefix
     s3_path = s3_uri.replace('s3://', '')
     
-    # Split by first slash to separate bucket and key
     parts = s3_path.split('/', 1)
     
     if len(parts) < 2:
@@ -39,7 +37,6 @@ def lambda_handler(event, context):
     bucket = parts[0]
     key = parts[1]
     
-    # Extract filename from key
     filename = key.split('/')[-1]
     
     return {

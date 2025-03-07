@@ -18,60 +18,47 @@ def lambda_handler(event, context):
         "zip_prefix": "zipped-results/"
     }
     """
-    # Extract input parameters from Step Functions
     raw_result_files = event.get('raw_result_files', [])
     formatted_csv_locations = event.get('formatted_csv_locations', [])
     timestamp = event.get('timestamp', '')
     output_bucket = event.get('output_bucket', '')
     zip_prefix = event.get('zip_prefix', 'zipped-results/')
     
-    # Use formatted CSV files if available, otherwise use raw files
     result_files = formatted_csv_locations if formatted_csv_locations else raw_result_files
     
-    # Ensure zip_prefix ends with a slash
     if not zip_prefix.endswith('/'):
         zip_prefix += '/'
     
-    # Generate output zip filename
     destination_key = f"{zip_prefix}athena_results_{timestamp}.zip"
     
     try:
-        # Create zip file in memory
         zip_buffer = io.BytesIO()
         
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for i, file_uri in enumerate(result_files):
-                # Parse S3 URI
                 if file_uri.startswith('s3://'):
                     parts = file_uri.replace('s3://', '').split('/')
                     source_bucket = parts[0]
                     source_key = '/'.join(parts[1:])
                 else:
-                    # If not a URI, assume it's a key in the output bucket
                     source_bucket = output_bucket
                     source_key = file_uri
                 
                 try:
-                    # Get the object from S3
                     response = s3.get_object(Bucket=source_bucket, Key=source_key)
                     content = response['Body'].read()
                     
-                    # Use just the filename for the zip entry
                     filename = source_key.split('/')[-1]
                     if not filename:
                         filename = f"file_{i}.csv"
                     
-                    # Add file to the zip
                     zip_file.writestr(filename, content)
                     print(f"Added file {filename} to zip")
                 except Exception as file_error:
                     print(f"Error processing file {file_uri}: {str(file_error)}")
-                    # Continue with other files instead of failing completely
         
-        # Reset buffer to beginning
         zip_buffer.seek(0)
         
-        # Upload the zip to S3
         s3.put_object(
             Body=zip_buffer,
             Bucket=output_bucket,
@@ -81,7 +68,6 @@ def lambda_handler(event, context):
         
         print(f"Successfully created and uploaded zip file to s3://{output_bucket}/{destination_key}")
         
-        # Create a JSON manifest file with details
         manifest = {
             'status': 'success',
             'timestamp': timestamp,
@@ -118,7 +104,6 @@ def lambda_handler(event, context):
         # Log the error to CloudWatch
         print(f"Error creating zip file: {str(e)}")
         
-        # Create an error marker in S3
         try:
             error_key = f"{zip_prefix}error_{timestamp}.json"
             s3.put_object(
@@ -130,7 +115,6 @@ def lambda_handler(event, context):
         except Exception as marker_error:
             print(f"Failed to create error marker: {str(marker_error)}")
         
-        # Return error details for Step Functions
         return {
             'status': 'failed',
             'error': str(e),

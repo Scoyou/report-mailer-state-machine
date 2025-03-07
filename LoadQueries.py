@@ -28,10 +28,6 @@ def lambda_handler(event, context):
     output_prefix = event.get('output_prefix', 'athena-results/')
     database = event.get('database', 'default')
     
-    # Initialize query mapping
-    query_mapping = {}
-    
-    # Load queries
     queries = []
     for query_name in query_names:
         sql_file_key = f"{query_prefix}{query_name}.sql"
@@ -43,7 +39,6 @@ def lambda_handler(event, context):
             response = s3.get_object(Bucket=query_index_bucket, Key=sql_file_key)
             sql_content = response['Body'].read().decode('utf-8')
             
-            # Add the query to our list
             queries.append({
                 'name': query_name,
                 'sql': sql_content,
@@ -59,10 +54,8 @@ def lambda_handler(event, context):
                 'query_name': query_name
             }
     
-    # Generate timestamp
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     
-    # Create parameter list for each query
     query_params = []
     for i, query_info in enumerate(queries):
         query_id = f"{query_info['name']}_{timestamp}"
@@ -77,7 +70,6 @@ def lambda_handler(event, context):
             'output_location': output_location
         })
     
-    # Return the parameters for parallel execution
     return {
         'query_params': query_params,
         'timestamp': timestamp,
