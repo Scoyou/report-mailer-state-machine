@@ -1,0 +1,4 @@
+boto3>=1.26.0
+paramiko>=3.0.0
+cryptography>=41.0.0
+requests

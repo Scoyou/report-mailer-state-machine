@@ -101,6 +101,37 @@
             "zip_prefix.$": "$.zip_prefix"
           }
         },
+        "ResultPath": "$.zip_result",
+        "Next": "CheckForTransport"
+      },
+      "CheckForTransport": {
+        "Type": "Choice",
+        "Choices": [
+          {
+            "Variable": "$.transporter",
+            "IsPresent": true,
+            "Next": "TransportFile"
+          }
+        ],
+        "Default": "ExecutionComplete"
+      },
+      "TransportFile": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::lambda:invoke",
+        "Parameters": {
+          "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:file-transporter-lambda",
+          "Payload": {
+            "source_bucket.$": "$.output_bucket",
+            "source_key.$": "$.zip_result.Payload.output_key",
+            "file_name.$": "$.zip_result.Payload.output_key",
+            "transporter.$": "$.transporter"
+          }
+        },
+        "ResultPath": "$.transport_result",
+        "Next": "ExecutionComplete"
+      },
+      "ExecutionComplete": {
+        "Type": "Pass",
         "End": true
       }
     }
