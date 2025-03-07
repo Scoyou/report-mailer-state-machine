@@ -29,7 +29,8 @@
         "query_id.$": "$$.Map.Item.Value.query_id",
         "database.$": "$$.Map.Item.Value.database",
         "output_bucket.$": "$$.Map.Item.Value.output_bucket",
-        "output_location.$": "$$.Map.Item.Value.output_location"
+        "output_location.$": "$$.Map.Item.Value.output_location",
+        "query_name.$": "$$.Map.Item.Value.query_name"
       },
       "Iterator": {
         "StartAt": "ExecuteSingleQuery",
