@@ -48,6 +48,7 @@ def lambda_handler(event, context):
     # Get query parameters
     query = event.get('query')
     query_id = event.get('query_id')
+    query_name = event.get('query_name', query_id)  # Use the query name if provided
     database = event.get('database')
     output_bucket = event.get('output_bucket')
     output_location = event.get('output_location')
@@ -98,7 +99,7 @@ def lambda_handler(event, context):
             print(f"Query {query_id} completed successfully. Results at: {result_file}")
             
             # Process the CSV file
-            processed_csv_key = f"{output_location}processed_{query_id}.csv"
+            processed_csv_key = f"{output_location}{query_name}.csv"
             formatted_csv_location = process_csv(
                 s3_client,
                 output_bucket,
