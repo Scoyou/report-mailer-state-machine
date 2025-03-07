@@ -1,0 +1,106 @@
+{
+  "Comment": "Process Athena queries in parallel with monitoring",
+  "StartAt": "PrepareQueries",
+  "States": {
+    "PrepareQueries": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:PrepareQueries",
+        "Payload": {
+          "output_bucket.$": "$.output_bucket",
+          "output_prefix.$": "$.output_prefix",
+          "database.$": "$.database",
+          "queries.$": "$.queries"
+        }
+      },
+      "ResultPath": "$.query_details",
+      "Next": "ExecuteQueriesInParallel"
+    },
+    "ExecuteQueriesInParallel": {
+      "Type": "Map",
+      "InputPath": "$.query_details.Payload",
+      "ItemsPath": "$.query_params",
+      "MaxConcurrency": 10,
+      "Parameters": {
+        "query.$": "$$.Map.Item.Value.query",
+        "query_id.$": "$$.Map.Item.Value.query_id",
+        "database.$": "$$.Map.Item.Value.database",
+        "output_bucket.$": "$$.Map.Item.Value.output_bucket",
+        "output_prefix.$": "$$.Map.Item.Value.output_location"
+      },
+      "Iterator": {
+        "StartAt": "ExecuteSingleQuery",
+        "States": {
+          "ExecuteSingleQuery": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:ExecuteSingleQuery",
+              "Payload.$": "$"
+            },
+            "End": true
+          }
+        }
+      },
+      "ResultPath": "$.query_results",
+      "Next": "MonitorQueries"
+    },
+    "MonitorQueries": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:ResultsGatherer",
+        "Payload": {
+          "query_results.$": "$.query_results[*].Payload",
+          "timestamp.$": "$.query_details.Payload.timestamp",
+          "output_bucket.$": "$.output_bucket",
+          "output_prefix.$": "$.output_prefix",
+          "zip_prefix.$": "$.zip_prefix"
+        }
+      },
+      "ResultPath": "$.monitoring_result",
+      "Next": "CheckQueryStatus"
+    },
+    "CheckQueryStatus": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.monitoring_result.Payload.status",
+          "StringEquals": "RUNNING",
+          "Next": "WaitBeforeNextCheck"
+        },
+        {
+          "Variable": "$.monitoring_result.Payload.status",
+          "StringEquals": "FAILED",
+          "Next": "QueryFailed"
+        }
+      ],
+      "Default": "CreateZipFile"
+    },
+    "WaitBeforeNextCheck": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "MonitorQueries"
+    },
+    "QueryFailed": {
+      "Type": "Fail",
+      "Cause": "At least one Athena query failed",
+      "Error": "AthenaQueryFailure"
+    },
+    "CreateZipFile": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-2:127178877223:function:zip-s3-folder",
+        "Payload": {
+          "result_files.$": "$.monitoring_result.Payload.result_files",
+          "timestamp.$": "$.query_details.Payload.timestamp",
+          "output_bucket.$": "$.output_bucket",
+          "zip_prefix.$": "$.zip_prefix"
+        }
+      },
+      "End": true
+    }
+  }
+}
