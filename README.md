@@ -187,7 +187,7 @@ You can extend the workflow by:
 
 3. **Missing or Invalid Files**
    - Ensure SQL files exist at the specified locations
-   - Verify the query index file format is correct
+   - If transporting via SFTP, ensure SFTP directory exists on target server
 
 ### Debugging
 
