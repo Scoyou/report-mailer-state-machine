@@ -49,7 +49,7 @@ def lambda_handler(event, context):
     query = event.get('query')
     query_id = event.get('query_id')
     query_name = event.get('query_name', query_id)  # Use the query name if provided
-    database = event.get('database')
+    database = event.get('database', 'default')
     output_bucket = event.get('output_bucket')
     output_location = event.get('output_location')
     
