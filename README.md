@@ -189,6 +189,9 @@ You can extend the workflow by:
    - Ensure SQL files exist at the specified locations
    - If transporting via SFTP, ensure SFTP directory exists on target server
 
+4. **Error: Runtime exited with error: signal: killed"**
+   - This generally means that the Lambda is out of memory. Try increasing memory then running the report again.
+
 ### Debugging
 
 1. Enable detailed CloudWatch logging for Lambda functions
